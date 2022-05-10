@@ -1,0 +1,13 @@
+traffic light
+traffic lights
+bridge
+viaduct
+road
+gas station
+tunnel
+roundabout
+hospital
+park
+flat
+house
+speedbump
