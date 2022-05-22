@@ -1,0 +1,14 @@
+bocht
+beurs
+dreef
+gracht
+kade
+laan
+plaats
+plantsoen
+poort
+rijbaan
+singel
+steeg
+straat
+weg
