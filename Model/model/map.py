@@ -335,17 +335,52 @@ print(path)
 #ox.plot_graph_route(G_with_intersection, path[0],figsize=(30,30))
 
 
-# In[388]:
+# In[406]:
 
 
 street = organise_edge_of_street("Amstelveenseweg",G2)
 greaph_G_with_intersection = ox.graph_to_gdfs(G2)
 
 
-# In[388]:
+# In[412]:
+
+
+def get_junction_from_distance(node,way,distance):
+    #assumes direction is calculated
+    for i, begin in enumerate(way):
+        if begin[0]==node:
+            currentDistance=begin[3]['length']
+            nextDistancesByIndex=[0]
+            for j, junction in enumerate(way, i+1):
+                nextDistancesByIndex.append(currentDistance)
+                currentDistance+=junction[3]['length']
+            closestIndex=0
+            for index,dst in enumerate(nextDistancesByIndex):
+                if abs(dst-distance) < abs(nextDistancesByIndex[closestIndex]-distance):
+                    closestIndex=index
+            return way[i+closestIndex]
+
+
+# In[417]:
 
 
 
+
+
+# In[415]:
+
+
+print(get_junction_from_distance(7213967683,street['forward'][1], 300))
+
+
+# In[416]:
+
+
+def get_junction_from_ordinal(node,way,ordinal):
+    #assumes direction is calculated
+    for i, begin in enumerate(way):
+        if begin[0]==node:
+            return way[ordinal+i]
 
 
 # In[389]:
@@ -440,7 +475,7 @@ def find_shortest_path(origin,destination):
 # h = highways.to_dict()
 #h = pd.Series(highways.values, index=highways.index).to_dict()
 n = 'A10'
-h = highways.query(f"ref=='{n}'")
+#h = highways.query(f"ref=='{n}'")
 #print(h)
 print(G.nodes.get(key=7549548760))
 #for road in h.index[h['ref'] == n].tolist():
@@ -484,14 +519,14 @@ area = ox.geocode_to_gdf(["N2814628451"],by_osmid=True)
 #ox.plot_graph_folium(G)
 
 
-# In[ ]:
+# In[395]:
 
 
 file = '../../Data/AH/Amstelveenseweg 186.txt'
 get_ipython().run_line_magic('run', 'NLP.py {file}')
 
 
-# In[ ]:
+# In[396]:
 
 
 def readFile(address):
@@ -499,7 +534,7 @@ def readFile(address):
         return pickle.load(file)
 
 
-# In[ ]:
+# In[397]:
 
 
 address = 'Amstelveenseweg 186'
@@ -525,13 +560,13 @@ print(path)
 #path = list(dict.fromkeys(path))
 
 
-# In[ ]:
+# In[398]:
 
 
 #ox.folium.plot_route_folium(G, path, popup_attribute="name")
 
 
-# In[ ]:
+# In[399]:
 
 
 #print(nx.has_path(G,4721896455, 735062608))
@@ -563,7 +598,7 @@ target_node = ox.distance.nearest_nodes(G, target_x, target_y)
 get_ipython().system('jupyter nbconvert --to script *.ipynb')
 
 
-# In[ ]:
+# In[401]:
 
 
 n1 = 46494259
