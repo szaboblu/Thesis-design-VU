@@ -1,75 +1,99 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[360]:
+# In[1]:
 
 
 import osmnx as ox
 import networkx as nx
 import pickle
 import math
+import geopandas as gpd
+import pandas as pd
 
 
-# In[361]:
+# In[2]:
 
 
-graphMiddle = "Minervahaven, Amsterdam, North Holland, Netherlands, 1013, Netherlands"
+class DirectionInstruction:
+    def __init__(self, text):
+        self.text=text
+        self.data={}
+    def extend(self,label='null', value='null'):
+        self.data[label] = value
+
+
+# In[3]:
+
+
+class RouteDescription:
+    def __init__(self, destination):
+        #self.origin = origin
+        self.destination = destination
+        self.steps = []
+
+    def addStep(self, directionInstruction):
+        self.steps.append(directionInstruction)
+
+
+# In[4]:
+
+
+graphMiddle = "Van Lennepbuurt, Amsterdam, North Holland, Netherlands"
 place_name = "Albert Heijn, 186, Amstelveenseweg, Schinkelbuurt, Amsterdam, North Holland, Netherlands, 1075XR, Netherlands"
 
 
-# In[362]:
+# In[5]:
 
 
 #traffic_signals = ox.geometries.geometries_from_address(place_name, tags = {"highway":"traffic_signals"} )
 
 
-# In[363]:
+# In[6]:
 
 
 #crossings=ox.geometries.geometries_from_address(place_name, tags = {"crossing":"marked"} )
 
 
-# In[364]:
+# In[7]:
 
 
 #roundabouts=ox.geometries.geometries_from_address(place_name, tags = {"junction":"roundabout"} )
 
 
-# In[365]:
+# In[8]:
 
 
 #highways = ox.geometries.geometries_from_address(place_name,dist=650, tags = {"highway":["motorway","trunk", "primary", "secondary","tertiary","unclassified", "residential","road"]} )
 
 
-# In[366]:
+# In[9]:
 
 
-graph = ox.graph_from_address(place_name, network_type='drive',simplify = True)
+#graph = ox.graph_from_address(place_name, network_type='drive',simplify = True)
 #ox.distance.nearest_nodes(graph, 8.435432953597548, 47.39719131318801)
 #ox.plot.plot_graph_routes(graph,["N", "N2814628451"] )
 
 
-# In[367]:
+# In[10]:
 
 
 #CHANGE BACK TO MIDDLE
-utn = ox.settings.useful_tags_node
-utw = ox.settings.useful_tags_way
 ox.settings.all_oneway = False
-ox.settings.useful_tags_node = utn # Default is [“ref”, “highway”]
-ox.settings.useful_tags_way = utw # Default is [“bridge”, “tunnel”, “oneway”, “lanes”, “ref”, “name”, “highway”, “maxspeed”, “service”, “access”, “area”, “landuse”, “width”, “est_width”, “junction”]
+ox.settings.useful_tags_node = ["ref", "highway", "traffic_signals"] # Default is ["ref", "highway"]
+ox.settings.useful_tags_way = ["bridge", "tunnel", "oneway", "lanes", "ref", "name", "highway", "maxspeed", "service","junction", "turn","destination", "destination:ref"] # Default is ["bridge", "tunnel", "oneway", "lanes", "ref", "name", "highway", "service", "access", "area", "landuse", "width", "est_width", "junction"]
 custom_filter='["highway"~"motorway|trunk|primary|secondary|tertiary|unclassified|residential|road"]'
-G = ox.graph.graph_from_address(place_name,dist=650, network_type='drive',simplify=True, custom_filter=custom_filter)
+G = ox.graph.graph_from_address(graphMiddle,dist=8000, network_type='drive',simplify=True, custom_filter=custom_filter)
 
 
-# In[368]:
+# In[11]:
 
 
 def linestring_to_points(feature,line):
     return {feature:line.coords}
 
 
-# In[369]:
+# In[12]:
 
 
 def calculate_direction(line):
@@ -84,7 +108,16 @@ def calculate_direction(line):
     return {'begin':begin, 'end':end}
 
 
-# In[370]:
+# In[13]:
+
+
+def stringify(string):
+    if isinstance(string, list):
+        return ' '.join(map(str, string))
+    return string
+
+
+# In[14]:
 
 
 # create nodes, edges GeoDataFrames and fill in all edge geometry attributes
@@ -94,10 +127,14 @@ nodes, edges = ox.graph_to_gdfs(G, fill_edge_geometry=True)
 edges['points'] = edges.apply(lambda x: [y for y in x['geometry'].coords], axis=1)
 # calculate the direction of the way at the beginning and ending (to decide ways connected but in opposite directions)
 edges['directions'] = edges.apply(lambda x: calculate_direction(x['points']), axis=1)
-
+# reanme name attribute (it is already used by the edge u, v, r struct)
+edges['streetName'] = edges.apply(lambda x: stringify(x['name']), axis=1)
+edges.rename(columns={'name':'Name'})
+edges['U'] = edges.apply(lambda x: x.name[0], axis=1)
+edges['V'] = edges.apply(lambda x: x.name[1], axis=1)
+edges.apply(lambda x: stringify(x['ref']),axis=1)
 G2 = ox.utils_graph.graph_from_gdfs(nodes, edges, graph_attrs=G.graph)
 for u, v, data in G2.edges(keys=False, data=True):
-    print(data)
     assert 'geometry' in data
 
 #remove the attribute containing Linestring.
@@ -107,43 +144,43 @@ for n1, n2, d in G2.edges(data=True):
         d.pop(att, None)
 
 
-# In[371]:
+# In[15]:
 
 
 #simple_G=ox.simplification.simplify_graph(G2)
 
 
-# In[372]:
+# In[16]:
 
 
 #projected=ox.project_graph(simple_G, to_crs='EPSG:3035')
 projected=ox.project_graph(G2, to_crs='EPSG:3035')
 #have to work on tolerance pl:(https://nominatim.openstreetmap.org/ui/details.html?osmtype=W&osmid=89524318)
-G_with_intersection = ox.simplification.consolidate_intersections(projected, tolerance=8, rebuild_graph=True, dead_ends=True, reconnect_edges=True)
+G_with_intersection = ox.simplification.consolidate_intersections(projected, tolerance=5, rebuild_graph=True, dead_ends=True, reconnect_edges=True)
 
 
-# In[373]:
+# In[17]:
 
 
 #print(ox.projection.is_projected('EPSG:3035'))
 #ox.plot_graph_folium(simple_G, node_color='g',figsize=(30,30))
-#ox.plot_graph(G_with_intersection, node_color='g',figsize=(30,30))
-#ox.plot_graph_folium(G,popup_attribute="osmid")
+#ox.plot_graph(G_with_intersection, node_color='g',figsize=(50,50))
+#ox.plot_graph_folium(G2,popup_attribute="osmid")
 
 
-# In[374]:
+# In[18]:
 
 
 #nodes, edges = ox.graph_to_gdfs(G_with_intersection)
 
 
-# In[375]:
+# In[19]:
 
 
 #nx.get_edge_attributes(G_with_intersection,name='osmid')
 
 
-# In[376]:
+# In[20]:
 
 
 class Point:
@@ -152,7 +189,7 @@ class Point:
         self.y=y
 
 
-# In[377]:
+# In[21]:
 
 
 def is_right(a, b, c):
@@ -163,7 +200,7 @@ def is_right(a, b, c):
     #If the line is horizontal, then this returns true if the point is above the line.
 
 
-# In[378]:
+# In[22]:
 
 
 a = Point(47.4488,19.0714)
@@ -173,27 +210,23 @@ cr = Point(47.4565,19.0761)
 is_right(a,b,cr)
 
 
-# In[379]:
+# In[23]:
 
 
 def list_duplicates(l):
-    seen = set()
-    seen_add = seen.add
-    # adds all elements it doesn't know yet to seen and all other to seen_twice
-    seen_twice = set( x for x in l if x in seen or seen_add(x) )
-    # turn the set into a list (as requested)
-    return list( seen_twice )
+    seen = set(l)
+    return list(seen)
 
 
-# In[380]:
+# In[24]:
 
 
-def get_closest_node(given, target):
+def get_closest_node(given, target, G):
     distance=9999
-    for edge in G_with_intersection.edges(data=True,keys=True):
+    for i, node in G[0].iterrows:
 
         #print(edge[3]["name"])
-        if edge[3]["name"] == given:
+        if node.name == given:
             #print(edge)
             for edge2 in G_with_intersection.edges(data=True,keys=True):
                 if edge2[3]["name"] == target:
@@ -205,7 +238,7 @@ def get_closest_node(given, target):
                             nodes=original_id.strip('][').split(', ')
 
 
-# In[381]:
+# In[25]:
 
 
 def find_street_end(street):
@@ -215,11 +248,12 @@ def find_street_end(street):
         numInWay = 0
         numOutWay = 0
         for otherway in street:
-            if otherway[0] != way[1] or otherway[1] != way[0]:
-                if way[0] == otherway[1]:
+            if otherway.U != way.V or otherway.V != way.U:
+                if way.U == otherway.V:
                     numInWay+=1
-                if way[1] == otherway[0]:
+                if way.V == otherway.U:
                     numOutWay+=1
+        # numInWay != 0 will find all possible sections (could be usinted somehow))
         if numInWay == 0 :
             beginWays.append(way)
         if numOutWay == 0 :
@@ -228,43 +262,41 @@ def find_street_end(street):
     return {"beginWays":beginWays,"endWays":endWays}
 
 
-# In[382]:
+# In[26]:
 
 
-def recursive_find_section(street,route, direction):
-
+def recursive_find_section(street,r, direction="beginWays"):
     possibilites=[]
     for way in street:
-        if (direction=="beginWays" and way[0] == route[-1][1] and way[1] != route[-1][0]) \
-                or (direction=="endWays" and way[1] == route[-1][0] and way[0] != route[-1][1]):
-            possibilites.append(way)
+            if (direction=="beginWays" and way.U == r[-1].V and way.V != r[-1].U) \
+                    or (direction=="endWays" and way.V == r[-1].U and way.U != r[-1].V):
+                possibilites.append(way)
 
     if possibilites:
         closest=possibilites[0]
         for candidate in possibilites:
-            print(candidate)
-            if abs(candidate[3]["directions"]["begin"]-route[-1][3]["directions"]['end']) < abs(closest[3]["directions"]["begin"]-route[-1][3]["directions"]['end']):
+            if abs(candidate.directions["begin"]-r[-1].directions['end']) < abs(closest.directions["begin"]-r[-1].directions['end']):
                 closest=candidate
-        route.append(closest)
-        #street.remove(possibilites[-1])
-        return recursive_find_section(street,route, direction)
-    return route
+        if (pd.DataFrame.from_records(r)['U']==closest.U).any():
+            return r
+        else:
+            r.append(closest)
+            return recursive_find_section(street,r, direction)
+    return r
 
 
-# In[383]:
+# In[27]:
 
 
 def find_street_section(street,street_ends, direction):
     streetSections=[]
-
     for beginWay in street_ends[direction]:
-        beginRoute=[beginWay]
-        route=recursive_find_section(street,beginRoute, direction)
-        streetSections.append(route)
+        route=recursive_find_section(street,[[beginWay]], direction)
+        streetSections.append(pd.DataFrame.from_records(route))
     return streetSections
 
 
-# In[384]:
+# In[28]:
 
 
 def sort_street(street):
@@ -275,258 +307,244 @@ def sort_street(street):
     return {"forward":streetSectionsForward,"backward":streetSectionsBackward}
 
 
-# In[385]:
+# In[29]:
 
 
 def organise_edge_of_street(street,graph):
     edges=[]
-    nodes,EDGES=ox.graph_to_gdfs(graph)
-    for edge in graph.edges(data=True,keys=True):
-    #for index, edge in EDGES.iterrows():
+    #nodes,EDGES=ox.graph_to_gdfs(graph)
+    #for edge in graph.edges(data=True,keys=True):
+    for index, edge in graph[1].iterrows():
         #Check if a given key already exists in a dictionary
-        if edge[3]["highway"] != 'busway':
-            if "name" in edge[3]:
-                if isinstance(edge[3]["name"], str):
-                    if edge[3]["name"] == street:
-                        edges.append(edge)
-                else:
-                    for name in edge[3]["name"]:
-                        if name == street:
-                            edges.append(edge)
+        if isinstance(edge.streetName, str):
+            if street in edge.streetName:
+                edges.append(edge)
+        if isinstance(edge.streetName, list):
+            for name in edge.streetName:
+                if street in name:
+                    edges.append(edge)
+        if isinstance(edge.ref, str):
+            if  street in edge.ref:
+                edges.append(edge)
+        if isinstance(edge.ref, list):
+            for name in edge.ref:
+                if street in name:
+                    edges.append(edge)
     return sort_street(edges)
 
 
-# In[386]:
+# In[30]:
 
 
-def get_nodes_of_way(ways):
-
-    #nodes=[ways[0][3]["u_original"]]
-    #for way in ways:
-    #    nodes.append(way[3]["v_original"])
-
-    nodes=[ways[0][0]]
-    for way in ways:
-        nodes.append(way[1])
-
-    return nodes
+#for n, nbrsdict in G.adjacency():
+#    for nbr, keydict in nbrsdict.items():
+#       print(nbr, keydict)
 
 
-# In[387]:
+# In[31]:
 
 
-path=[]
-streetName="Amstelveenseweg"
-for edge in G_with_intersection.edges(data=True,keys=True):
-    #Check if a given key already exists in a dictionary
-    nodes=[]
-    if edge[3]["highway"] != 'busway':
-        if "name" in edge[3]:
-            if isinstance(edge[3]["name"], str):
-                if edge[3]["name"] == streetName:
-                    nodes=[edge[0],edge[1]]
-            else:
-                for name in edge[3]["name"]:
-                    if name == streetName:
-                        nodes=[edge[0],edge[1]]
-    if nodes:
-        path.append(nodes)
-print(path)
-#ox.plot_graph_route(G_with_intersection, path[0],figsize=(30,30))
+graph_G = ox.graph_to_gdfs(G2)
+#street = organise_edge_of_street("Amstelveenseweg",graph_G)
 
 
-# In[406]:
-
-
-street = organise_edge_of_street("Amstelveenseweg",G2)
-greaph_G_with_intersection = ox.graph_to_gdfs(G2)
-
-
-# In[412]:
+# In[32]:
 
 
 def get_junction_from_distance(node,way,distance):
     #assumes direction is calculated
-    for i, begin in enumerate(way):
-        if begin[0]==node:
-            currentDistance=begin[3]['length']
-            nextDistancesByIndex=[0]
-            for j, junction in enumerate(way, i+1):
-                nextDistancesByIndex.append(currentDistance)
-                currentDistance+=junction[3]['length']
-            closestIndex=0
-            for index,dst in enumerate(nextDistancesByIndex):
-                if abs(dst-distance) < abs(nextDistancesByIndex[closestIndex]-distance):
-                    closestIndex=index
-            return way[i+closestIndex]
+    beginNode=None
+    currentDistance=0
+    nextDistancesByIndex=[0]
+    for i, begin in way.iterrows():
+        if beginNode:
+            nextDistancesByIndex.append(currentDistance)
+            currentDistance+=begin.length
+        if begin.U==node:
+            beginNode=i
+            currentDistance=begin.length
+
+    closestIndex=0
+    for index,dst in enumerate(nextDistancesByIndex):
+        if abs(dst-distance) < abs(nextDistancesByIndex[closestIndex]-distance):
+            closestIndex=index
+    return way.iloc[beginNode+closestIndex].U
 
 
-# In[417]:
+# In[33]:
 
 
+#print(get_junction_from_distance(46307138,street['forward'][1], 300))
 
 
-
-# In[415]:
-
-
-print(get_junction_from_distance(7213967683,street['forward'][1], 300))
-
-
-# In[416]:
+# In[34]:
 
 
 def get_junction_from_ordinal(node,way,ordinal):
     #assumes direction is calculated
-    for i, begin in enumerate(way):
-        if begin[0]==node:
-            return way[ordinal+i]
+    if ordinal == -1:
+        return way.iloc[-1].U
+    for i, begin in way.iterrows():
+        if begin.U==node:
+            return way.iloc[ordinal+i].U
 
 
-# In[389]:
+# In[35]:
 
 
-p=get_nodes_of_way(street['forward'][1])
-print(p)
-ox.plot_graph_route(simple_G, p)
+#print(get_junction_from_ordinal(46307138,street['forward'][1], 6))
 
 
-# In[390]:
+# In[36]:
 
 
-def get_intersection_of_streets(first, second):
-    #n = edges.query(f"lanes=='1'")
-    #print(n)
-    #print(G_with_intersection.nodes)
-    #n = 'Archangelkade'
-    #m= 'Rigakade'
-    #print(edges.name)
-    #GeoDataFrame(edges, edges.name == 'n')
-    #e = edges.explore(name==n)
-    nodes = []
-    for edge in G_with_intersection.edges(data=True,keys=True):
-
-        #print(edge[3]["name"])
-        if hasattr(3, 'name'):
-            if edge[3]["name"] == first:
-                #print(edge)
-                for edge2 in G_with_intersection.edges(data=True,keys=True):
-                    if edge2[3]["name"] == second:
-                        if edge2[0] == edge[1] or edge2[1] == edge[0]:
-                            original_id = G_with_intersection.nodes[edge[1]]["osmid_original"]
-                            if type(original_id) is int:
-                                nodes.append(original_id)
-                            else:
-                                nodes=original_id.strip('][').split(', ')
-
-                        #if type
-                        #nodes.append(G_with_intersection.nodes[edge[1]]["osmid_original"].strip('][').split(', '))
-    #e.head()
-    #list = e.index[e['ref'] == n].tolist()
-    #for road in list:
-    #    print(road[1])
-    # get nodes only at the intersection
-    nodes = list_duplicates(nodes)
-    print(nodes)
+def get_nodes_of_way(ways,direction):
+    if direction == 'backward':
+        ways=ways.iloc[::-1]
+    nodes=[ways.iloc[0].U]
+    for way in ways.itertuples():
+        nodes.append(way.V)
     return nodes
 
 
-# In[391]:
+# In[38]:
 
 
-def find_shortest_path(origin,destination):
-    #origin = "Albert Heijn Distributiecentrum, 1, Hoofdtocht, Westerspoor, Zaandam, Zaanstad, North Holland, Netherlands, 1507CH, Netherlands"
-
-    #destination = "Albert Heijn, 186, Amstelveenseweg, Schinkelbuurt, Amsterdam, North Holland, Netherlands, 1075XR, Netherlands"
-    #destination = 'Sassenheimstraat, Hoofddorperpleinbuurt, Amsterdam, North Holland, Netherlands, 1059AM, Netherlands'
-
-        #if(highways.index[h['name'] == destination].tolist() or road["ref"] == destination):
-        #    roadsDestination.append(road.osmid)
-    # Get origin x and y coordinates
-    orig_y, orig_x = ox.geocoder.geocode(origin)
-
-    # Get target x and y coordinates
-    target_y, target_x =ox.geocoder.geocode(destination)
-    # Find the node in the graph that is closest to the origin point (here, we want to get the node id)
-    orig_node = ox.distance.nearest_nodes(G, orig_x, orig_y )
-
-    # Find the node in the graph that is closest to the target point (here, we want to get the node id)
-    target_node = ox.distance.nearest_nodes(G, target_x, target_y)
-
-    route=  nx.shortest_path(G, orig_node, target_node)
-
-    #print(orig_node, target_node)
-    # Get shortest path
-
-    # Plot the shortest path
-    #ox.plot_graph_route(G, route)
-    return route
+#p=get_nodes_of_way(street['backward'][0],'backward')
+#print(p)
+#ox.plot_graph_route(G2, p)
 
 
-# In[392]:
+# In[39]:
 
 
-#get_intersection_of_streets('A10','A4')
+def get_intersections_of_streets(first, second, destination, graph):
+    edges = pd.DataFrame()
+    edgesFirst = graph[1][(graph[1].ref.str.contains(first, na=False))|(graph[1].streetName.str.contains(first, na=False))]
+    edgesSecond =graph[1][(graph[1].ref.str.contains(second, na=False))|(graph[1].streetName.str.contains(second, na=False))|(graph[1].destination.str.contains(second, na=False))|(graph[1]['destination:ref'].str.contains(second, na=False))]
+    destinationEdges = graph[1][((graph[1].ref.str.contains(second, na=False))|(graph[1].streetName.str.contains(second, na=False))|(graph[1].destination.str.contains(second, na=False))|(graph[1]['destination:ref'].str.contains(second, na=False)))&((graph[1].destination.str.contains(destination, na=False))|(graph[1]['destination:ref'].str.contains(destination, na=False)))]
+
+    if not destinationEdges.empty:
+        edgesSecond=destinationEdges
+    for i, edge in edgesFirst.iterrows():
+        matchingEdges= edgesSecond[edgesSecond.U==edge.V]
+        edges=pd.concat([edges, matchingEdges], ignore_index = True, axis = 0)
+    return edges
 
 
-# In[393]:
+# In[40]:
 
 
-# h = highways.to_dict()
-#h = pd.Series(highways.values, index=highways.index).to_dict()
-n = 'A10'
-#h = highways.query(f"ref=='{n}'")
-#print(h)
-print(G.nodes.get(key=7549548760))
-#for road in h.index[h['ref'] == n].tolist():
-    #print(nodes.get(key=6316199))
-#unique_ids = h.groupby('osmid', as_index=False).first()
-#print(unique_ids.key[0])
+def check_name(street, edge):
+    return is_in_ref(street, edge.streetName) or is_in_ref(street,edge.ref)
+
+
+# In[41]:
+
+
+def is_in_ref(street, ref):
+    if isinstance(ref, str):
+        if  street.lower() in ref.lower():
+            return True
+    return False
+
+
+# In[42]:
+
+
+def is_in_Name(street, streetName):
+    if isinstance(streetName, str):
+        if street.lower() in streetName.lower():
+            return True
+    return False
+
+
+# In[43]:
+
+
+#dest = get_intersections_of_streets('Kolkweg','A10', 'west', graph_G)
+
+
+# In[44]:
+
+
+def find_shortest_path(g,origin="Albert Heijn Distributiecentrum, 1, Hoofdtocht, Westerspoor, Zaandam, Zaanstad, North Holland, Netherlands, 1507CH, Netherlands",destination="Kolkweg, Oostzaan, North Holland, Netherlands, 1511 HZ, Netherlands"):
+    orig_node   = get_node_from_address(origin,g)
+    target_node = get_node_from_address(destination,g)
+    return nx.shortest_path(g, orig_node, target_node)
+
+
+# In[45]:
+
+
+def get_node_from_address(address,g):
+    y, x = ox.geocoder.geocode(address)
+    return ox.distance.nearest_nodes(g, x, y )
+
+
+# In[197]:
+
+
+def find_way_from_ends(u,v,g):
+    return pd.DataFrame(g[1][(g[1].U==u)&(g[1].V==v)])
+
+
+# In[47]:
+
+
+def get_roundabaouts(edges):
+    roundabaoutsEdges=[]
+    for index, edge in edges.iterrows():
+        if edge.junction == 'roundabout':
+            roundabaoutsEdges.append(edge)
+    roundabaouts=[]
+    already_in=[]
+    for index, e in enumerate(roundabaoutsEdges):
+        if e.U not in already_in:
+            route = recursive_find_section(roundabaoutsEdges,[e])
+            roundabaout=pd.DataFrame.from_records(route)
+            roundabaouts.append(roundabaout)
+            for i,r  in roundabaout.iterrows():
+                already_in.append(r.U)
+    return roundabaouts
 
 
 # In[ ]:
 
 
-#nodes, edges = ox.graph_to_gdfs(G)
-print(G.nodes.get(key=6932152172))
-#nodes.head()
+ROUNDABAOUTS = get_roundabaouts(graph_G[1])
 
 
 # In[ ]:
 
 
-edges.head()
-#G.edges.get(key=46319974)
+#coord = ox.geocoder.geocode(place_name)
+#area = ox.geocode_to_gdf(["N2814628451"], by_osmid=True)
 
 
 # In[ ]:
 
 
-coord = ox.geocoder.geocode(place_name)
+'''
+files = ['/Users/balazs/Desktop/Thesis/Data/AH/Amstelveenseweg\ 186.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/August\ Allebeplein\ 12.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Bilderdijkstraat\ 37.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Bourgondischelaan\ 14-28.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Brink\ 20.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Eef\ Kamerbeekstraat\ 168.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Groenhof\ 144.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Haarlemmerdijk\ 1.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Karspeldreef\ 1389.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Maalderij\ 31.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Rembrandthof\ 49.txt',
+'/Users/balazs/Desktop/Thesis/Data/AH/Westelijke\ Halfrond\ 70.txt']
 
-area = ox.geocode_to_gdf(["N2814628451"],by_osmid=True)
-
-
-# In[ ]:
-
-
-#ox.plot_graph_folium(simple_G)
-
-
-# In[394]:
-
-
-#ox.plot_graph_folium(G)
-
-
-# In[395]:
-
-
-file = '../../Data/AH/Amstelveenseweg 186.txt'
-get_ipython().run_line_magic('run', 'NLP.py {file}')
+for f in files:
+    %run NLP.py {f}
+'''
 
 
-# In[396]:
+# In[51]:
 
 
 def readFile(address):
@@ -534,7 +552,74 @@ def readFile(address):
         return pickle.load(file)
 
 
-# In[397]:
+# In[254]:
+
+
+def get_closest_way(begin_u,ways,g):
+    shorest=9999
+    way = None
+    for i, w in ways.iterrows():
+        path= nx.shortest_path_length(g, begin_u, w.U)
+        if path < shorest:
+            shorest=path
+            way=w
+    return pd.DataFrame(way)
+
+
+# In[264]:
+
+
+def process_Route(Route, graphXML, graph):
+    destination=Route.destination
+    lastWay=pd.DataFrame()
+    lastWay=pd.concat([lastWay,find_way_from_ends(find_shortest_path(graph)[-2],find_shortest_path(graph)[-1],graphXML)],ignore_index = True, axis = 0)
+    for step in Route.steps:
+        data = step.data
+        destination=  ''
+        if 'neighbourhood'in data:
+            destination=data['neighbourhood']
+        if "city"in data:
+            destination=data["city"]
+        nextWayPossible=pd.DataFrame()
+        if "street" in data:
+            if isinstance(lastWay.iloc[-1]['name'], list):
+                for street in lastWay.iloc[-1]['name']:
+                    next = get_intersections_of_streets(street,data["street"], destination, graphXML)
+                    if not next.empty:
+                        nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
+            if isinstance(lastWay.iloc[-1]['name'], str):
+                next = get_intersections_of_streets( lastWay.iloc[-1]['name'],data["street"], destination, graphXML)
+                if not next.empty:
+                    nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
+            if isinstance(lastWay.iloc[-1]['ref'], list):
+                for street in lastWay.iloc[-1]['ref']:
+                    next = get_intersections_of_streets(street,data["street"], destination, graphXML)
+                    if not next.empty:
+                       nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
+            if isinstance(lastWay.iloc[-1]['ref'], str):
+                next = get_intersections_of_streets( lastWay.iloc[-1]['name'],data["street"], destination, graphXML)
+                if not next.empty:
+                    nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
+
+        nextWay=get_closest_way(lastWay.iloc[-1].U,nextWayPossible,graph)
+        #return nextWay.T
+        lastWay=pd.concat([lastWay,nextWay.T],ignore_index=True, axis = 0)
+    return lastWay
+
+
+# In[265]:
+
+
+ROUTE=readFile('Amstelveenseweg 186')
+
+
+# In[266]:
+
+
+final_route=process_Route(ROUTE, graph_G, G2)
+
+
+# In[189]:
 
 
 address = 'Amstelveenseweg 186'
@@ -560,49 +645,18 @@ print(path)
 #path = list(dict.fromkeys(path))
 
 
-# In[398]:
-
-
-#ox.folium.plot_route_folium(G, path, popup_attribute="name")
-
-
-# In[399]:
-
-
-#print(nx.has_path(G,4721896455, 735062608))
-#print(nx.shortest_path(G,4721896455, 735062608))
-#path = [item for sublist in path]
-origin = 'Kolkweg, Oostzaan, North Holland, Netherlands, 1511HZ, Netherlands'
-destination ='Amstelveenseweg 186'
-orig_y, orig_x = ox.geocoder.geocode(origin)
-
-    # Get target x and y coordinates
-target_y, target_x =ox.geocoder.geocode(destination)
-    # Find the node in the graph that is closest to the origin point (here, we want to get the node id)
-orig_node = ox.distance.nearest_nodes(G, orig_x, orig_y )
-
-    # Find the node in the graph that is closest to the target point (here, we want to get the node id)
-target_node = ox.distance.nearest_nodes(G, target_x, target_y)
-
-#route=  nx.shortest_path(G, orig_node, target_node)
-
-#print(list(dict.fromkeys(path)))
-#flatPath = sum(path, [])
-#print(flatPath)
-#r = [7382978,7382982]
-
-
 # In[ ]:
 
 
 get_ipython().system('jupyter nbconvert --to script *.ipynb')
 
 
-# In[401]:
+# In[ ]:
 
 
-n1 = 46494259
-n2 = 3657588020
-r=  nx.shortest_path(G, n1, n2)
-ox.plot_graph_route(G, r)
+#n1 = 46494259
+#n2 = 3657588020
+#r=  nx.shortest_path(G, n1, n2)
+#ox.plot_graph_route(G, r)
+#ox.save_graph_shapefile(G, filename=os.path.join('~/test_graph'))
 

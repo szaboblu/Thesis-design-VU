@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[1]:
+# In[3]:
 
 
 import errno
@@ -229,6 +229,9 @@ class DirectionInstruction:
     def extend(self,label='null', value='null'):
         self.data[label] = value
 
+    def getDestination(self):
+        if
+
 
 # In[22]:
 
@@ -258,7 +261,33 @@ def display_ent(tokenisedList):
     #displacy.render(tokenisedList, style="dep")
 
 
-# In[24]:
+# In[52]:
+
+
+def ordinal_to_num(text):
+    if re.search(r'([0-9])(?=st|nd|rd|th)', text):
+        return int(re.search(r'([0-9])(?=st|nd|rd|th)', text).group())
+    if text in ['first','next','immediately','Immediately','then']:
+        return 1
+    if text in ['second']:
+        return 2
+    if text in ['third']:
+        return 3
+    if text in ['fourth']:
+        return 4
+    if text in ['last']:
+        return -1
+    if text in ['before']:
+        return 99
+    if text in ['after']:
+        return 101
+    if text in ['over', 'through', 'trough']:
+        return 0
+    else:
+        return text
+
+
+# In[1]:
 
 
 def read_route(filename):
@@ -266,7 +295,7 @@ def read_route(filename):
     address = getAddressFromFileName(filename)
     route= RouteDescription(destination=address)
 
-    with open(file,'r') as f:
+    with open(filename,'r') as f:
         line = f.readline()
         is_travel_direction = False
         while line:
@@ -285,7 +314,7 @@ def read_route(filename):
                     for entity in nlpLine.ents:
                         for label in labels:
                             if(labels[label] == entity.label_):
-                                instruction.extend(label,entity.text)
+                                instruction.extend(label,ordinal_to_num(entity.text))
                     route.addStep(instruction)
             for match_id, _, _ in matches:
                 string_id = nlp.vocab.strings[match_id]
@@ -297,14 +326,6 @@ def read_route(filename):
     return route
 
 
-# In[25]:
-
-
-file = '../../Data/AH/Haarlemmerdijk 1.txt'
-Route = read_route(file)
-print(getAddressFromFileName(file))
-
-
 # In[26]:
 
 
@@ -313,7 +334,7 @@ if __name__ == '__main__':
     read_route(sys.argv[1])
 
 
-# In[27]:
+# In[4]:
 
 
 get_ipython().system('jupyter nbconvert --to script *.ipynb')
