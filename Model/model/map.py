@@ -415,31 +415,32 @@ def get_nodes_of_way(ways,direction):
 #ox.plot_graph_route(G2, p)
 
 
-# In[88]:
+# In[273]:
 
 
-def get_intersections_of_streets(first, second, destination, graph):
+def get_intersections_of_streets(first, second, destination, graph, strict=False):
     edges = pd.DataFrame()
     edgesFirst = graph[1][(graph[1].REF.str.contains(first, na=False))|(graph[1].streetName.str.contains(first, na=False))]
     edgesSecond =graph[1][(graph[1].REF.str.contains(second, na=False))|(graph[1].streetName.str.contains(second, na=False))|(graph[1].destination.str.contains(second, na=False))|(graph[1]['destination:ref'].str.contains(second, na=False))]
     destinationEdges = graph[1][((graph[1].REF.str.contains(second, na=False))|(graph[1].streetName.str.contains(second, na=False))|(graph[1].destination.str.contains(second, na=False))|(graph[1]['destination:ref'].str.contains(second, na=False)))&((graph[1].destination.str.contains(destination, na=False))|(graph[1]['destination:ref'].str.contains(destination, na=False)))]
-
     if not destinationEdges.empty:
         edgesSecond=destinationEdges
+    if strict:
+        edgesSecond =graph[1][(graph[1].REF.str.contains(second, na=False))|(graph[1].streetName.str.contains(second, na=False))]
     for i, edge in edgesFirst.iterrows():
         matchingEdges= edgesSecond[edgesSecond.U==edge.V]
         edges=pd.concat([edges, matchingEdges], ignore_index = True, axis = 0)
     return edges
 
 
-# In[89]:
+# In[274]:
 
 
 def check_name(street, edge):
-    return is_in_ref(street, edge.streetName) or is_in_ref(street,edge.ref)
+    return is_in_ref(street, edge.streetName) or is_in_ref(street,edge.REF)
 
 
-# In[90]:
+# In[275]:
 
 
 def is_in_ref(street, ref):
@@ -449,7 +450,7 @@ def is_in_ref(street, ref):
     return False
 
 
-# In[41]:
+# In[276]:
 
 
 def is_in_Name(street, streetName):
@@ -459,13 +460,13 @@ def is_in_Name(street, streetName):
     return False
 
 
-# In[42]:
+# In[277]:
 
 
 #dest = get_intersections_of_streets('Kolkweg','A10', 'west', graph_G)
 
 
-# In[43]:
+# In[278]:
 
 
 def find_shortest_path(g,origin="Albert Heijn Distributiecentrum, 1, Hoofdtocht, Westerspoor, Zaandam, Zaanstad, North Holland, Netherlands, 1507CH, Netherlands",destination="Kolkweg, Oostzaan, North Holland, Netherlands, 1511 HZ, Netherlands"):
@@ -474,7 +475,7 @@ def find_shortest_path(g,origin="Albert Heijn Distributiecentrum, 1, Hoofdtocht,
     return nx.shortest_path(g, orig_node, target_node)
 
 
-# In[44]:
+# In[279]:
 
 
 def get_node_from_address(address,g):
@@ -482,14 +483,14 @@ def get_node_from_address(address,g):
     return ox.distance.nearest_nodes(g, x, y )
 
 
-# In[45]:
+# In[280]:
 
 
 def find_way_from_ends(u,v,g):
     return pd.DataFrame(g[1][(g[1].U==u)&(g[1].V==v)])
 
 
-# In[46]:
+# In[281]:
 
 
 def get_roundabaouts(edges):
@@ -509,20 +510,20 @@ def get_roundabaouts(edges):
     return roundabaouts
 
 
-# In[47]:
+# In[282]:
 
 
 ROUNDABAOUTS = get_roundabaouts(graph_G[1])
 
 
-# In[48]:
+# In[283]:
 
 
 #coord = ox.geocoder.geocode(place_name)
 #area = ox.geocode_to_gdf(["N2814628451"], by_osmid=True)
 
 
-# In[49]:
+# In[284]:
 
 
 '''
@@ -544,7 +545,7 @@ for f in files:
 '''
 
 
-# In[50]:
+# In[285]:
 
 
 def readFile(address):
@@ -552,21 +553,51 @@ def readFile(address):
         return pickle.load(file)
 
 
-# In[51]:
+# In[286]:
 
 
 def get_closest_way(begin_u,ways,g):
     shorest=9999
     way = None
     for i, w in ways.iterrows():
-        path= nx.shortest_path_length(g, begin_u, w.U)
-        if path < shorest:
-            shorest=path
-            way=w
+        try:
+            path= nx.shortest_path_length(g, begin_u, w.U)
+            if path < shorest:
+                shorest=path
+                way=w
+        except nx.NetworkXNoPath:
+            print('No path')
     return pd.DataFrame(way)
 
 
-# In[92]:
+# In[287]:
+
+
+def find_intersection(way,street, destination, g , graph, strict=False ):
+    nextWayPossible=pd.DataFrame()
+    last = way.iloc[-1]
+    if isinstance(last['name'], list):
+        for s in last['name']:
+            next = get_intersections_of_streets(s,street, destination, g,strict)
+            if not next.empty:
+                nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
+    if isinstance(last['name'], str):
+        next = get_intersections_of_streets( last['name'],street, destination, g,strict)
+        if not next.empty:
+            nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
+    if isinstance(last['ref'], list):
+        for s in last['ref']:
+            next = get_intersections_of_streets(s,street, destination, g,strict)
+            if not next.empty:
+                nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
+    if isinstance(last['ref'], str):
+        next = get_intersections_of_streets( last['ref'],street, destination, g,strict)
+        if not next.empty:
+                nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
+    return nextWayPossible
+
+
+# In[288]:
 
 
 def process_Route(Route, graphXML, graph):
@@ -582,34 +613,19 @@ def process_Route(Route, graphXML, graph):
             destination=data["city"]
         nextWayPossible=pd.DataFrame()
         if "street" in data:
-            if isinstance(lastWay.iloc[-1]['name'], list):
-                for street in lastWay.iloc[-1]['name']:
-                    next = get_intersections_of_streets(street,data["street"], destination, graphXML)
-                    if not next.empty:
-                        nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
-            if isinstance(lastWay.iloc[-1]['name'], str):
-                next = get_intersections_of_streets( lastWay.iloc[-1]['name'],data["street"], destination, graphXML)
-                if not next.empty:
-                    nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
-            if isinstance(lastWay.iloc[-1]['ref'], list):
-                for street in lastWay.iloc[-1]['ref']:
-                    next = get_intersections_of_streets(street,data["street"], destination, graphXML)
-                    if not next.empty:
-                       nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
-            if isinstance(lastWay.iloc[-1]['ref'], str):
-                next = get_intersections_of_streets( lastWay.iloc[-1]['ref'],data["street"], destination, graphXML)
-                if not next.empty:
-                    nextWayPossible=pd.concat([nextWayPossible,next], ignore_index = True, axis = 0)
-
+             nextWayPossible= find_intersection(lastWay,data['street'], destination, graphXML , graph, False )
+        #print(nextWayPossible)
+        #return get_closest_way(way.iloc[-1].U,nextWayPossible,graph).T
         nextWay=get_closest_way(lastWay.iloc[-1].U,nextWayPossible,graph)
         #return nextWay.T
         lastWay=pd.concat([lastWay,nextWay.T],ignore_index=True, axis = 0)
         lastWay = iterate_until_named_road(lastWay,graphXML)
-
+        if "street" in data:
+            lastWay = find_street_from_between(data['street'], lastWay, graphXML, graph)
     return lastWay
 
 
-# In[93]:
+# In[289]:
 
 
 def iterate_until_named_road(ways,g):
@@ -622,7 +638,7 @@ def iterate_until_named_road(ways,g):
         return pd.concat([ways,nextWay],ignore_index=True, axis = 0)
 
 
-# In[94]:
+# In[290]:
 
 
 def iterate_until_named_road_recursive(way,g):
@@ -634,13 +650,26 @@ def iterate_until_named_road_recursive(way,g):
         return iterate_until_named_road_recursive(nextWay,g)
 
 
-# In[95]:
+# In[291]:
+
+
+def find_street_from_between(street, ways, g, graph):
+    last = ways.iloc[-1]
+    if not check_name(street, last):
+        possibles=find_intersection(ways,street, '', g , graph, True )
+        next=get_closest_way(last.U,possibles,graph).T
+        print(next)
+        return pd.concat([ways,next],ignore_index = True, axis = 0)
+    return ways
+
+
+# In[292]:
 
 
 ROUTE=readFile('Amstelveenseweg 186')
 
 
-# In[96]:
+# In[293]:
 
 
 final_route=process_Route(ROUTE, graph_G, G2)
