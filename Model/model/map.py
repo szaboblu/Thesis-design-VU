@@ -398,13 +398,19 @@ def get_junction_from_ordinal(node,way,ordinal):
 # In[36]:
 
 
-def get_nodes_of_way(ways,direction):
+def get_nodes_of_way(ways, g, direction = "forward",):
     if direction == 'backward':
         ways=ways.iloc[::-1]
     nodes=[ways.iloc[0].U]
     for way in ways.itertuples():
         nodes.append(way.V)
-    return nodes
+    route=[nodes[0]]
+    for n in nodes:
+        last =route[-1]
+        r = nx.shortest_path(g, last , n)
+        if len(r) > 1:
+            route+=r[1:]
+    return route
 
 
 # In[37]:
@@ -658,7 +664,6 @@ def find_street_from_between(street, ways, g, graph):
     if not check_name(street, last):
         possibles=find_intersection(ways,street, '', g , graph, True )
         next=get_closest_way(last.U,possibles,graph).T
-        print(next)
         return pd.concat([ways,next],ignore_index = True, axis = 0)
     return ways
 
@@ -679,7 +684,9 @@ final_route=process_Route(ROUTE, graph_G, G2)
 # In[ ]:
 
 
-#lastWay = iterate_until_named_road(final_route,graph_G)
+p=get_nodes_of_way(final_route,G2, 'forward')
+print(p)
+#ox.plot_graph_route(G2, p)
 
 
 # In[ ]:
