@@ -219,7 +219,7 @@ def getAddressFromFileName(filename):
     return filename.split("/")[-1].split(".",1)[0]
 
 
-# In[21]:
+# In[3]:
 
 
 class DirectionInstruction:
@@ -228,9 +228,6 @@ class DirectionInstruction:
         self.data={}
     def extend(self,label='null', value='null'):
         self.data[label] = value
-
-    def getDestination(self):
-        if
 
 
 # In[22]:
@@ -261,10 +258,11 @@ def display_ent(tokenisedList):
     #displacy.render(tokenisedList, style="dep")
 
 
-# In[52]:
+# In[1]:
 
 
 def ordinal_to_num(text):
+    text=text.lower()
     if re.search(r'([0-9])(?=st|nd|rd|th)', text):
         return int(re.search(r'([0-9])(?=st|nd|rd|th)', text).group())
     if text in ['first','next','immediately','Immediately','then']:
@@ -275,7 +273,7 @@ def ordinal_to_num(text):
         return 3
     if text in ['fourth']:
         return 4
-    if text in ['last']:
+    if text in ['last', 'bottom', 'end', 'top']:
         return -1
     if text in ['before']:
         return 99
@@ -338,4 +336,10 @@ if __name__ == '__main__':
 
 
 get_ipython().system('jupyter nbconvert --to script *.ipynb')
+
+
+# In[ ]:
+
+
+
 
