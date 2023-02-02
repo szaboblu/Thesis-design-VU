@@ -1,0 +1,8 @@
+# Thesis-design-VU
+
+Abstract. 
+
+With the growth of the economy, last mile freight delivery is becoming an even more important factor in urban areas. As the most difficult and inefficient part of the supply chain, last mile logistics turn into logistical and urban planning challenges as they need to get past obstacles posed by regulations and issues with urban street design. Current operations include navigational instructions for truck drivers specifically considering the urban challenges for each specific route, thus increasing effectiveness and sustainability. To further increase usefulness and information delivered to drivers, an effective system is proposed by transforming written navigational instructions into visual routes. This may be accomplished by using a natural language processing system and an open source mapping toolkit to create a working baseline solution from currently used instruction sets. The system operates effectively with the provided instruction set and has a low percentage of incorrectly detected entities - according to the evaluation of the design. A further in-depth analysis of the model’s mapping functionality revealed hidden abnormalities, in addition to the system’s overall outstanding potential, with at least 20% of the investigated pathways nearly resembling ideal routes. In conclusion, it is theoretically possible to develop a useful program that provides additional visual information based on navigational instructions to drivers. However, this opens up a number of new factors and irregularities that need to be appropriately handled in future research and development.
+
+# key words
+NLP, Spacy, Python, OpenstreetMaps
